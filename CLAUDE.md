@@ -13,11 +13,11 @@ Remote: `gianlucamazza/skill-cast`.
   `cast-resolve` (per-LAN device resolver, shared).
 
 ## Build workspace — OUTSIDE this plugin
-The openscreen fork + GN/gclient toolchain live at `~/Workspace/tooling/openscreen/` (gclient root),
+The openscreen fork + GN/gclient toolchain live at `~/Workspace/tooling/openscreen-build/` (gclient root),
 NOT inside this repo (heavy ~4.7G, gitignored, not bundled — best practice: build deps outside the plugin).
-- Fork checkout: `tooling/openscreen/openscreen/` (repo `gianlucamazza/openscreen`); custom sender code
-  in `cast/standalone_sender/`. Toolchain: `tooling/openscreen/depot_tools/`.
-- Built sender binary: `tooling/openscreen/openscreen/out/Default/cast_sender` — located at runtime via
+- Fork checkout: `tooling/openscreen-build/openscreen/` (repo `gianlucamazza/openscreen`); custom sender code
+  in `cast/standalone_sender/`. Toolchain: `tooling/openscreen-build/depot_tools/`.
+- Built sender binary: `tooling/openscreen-build/openscreen/out/Default/cast_sender` — located at runtime via
   `$CAST_MIRROR_BIN` (that path is the default). Build steps: `docs/openscreen-integration.md`.
 
 ## Commands

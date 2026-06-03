@@ -19,11 +19,11 @@ versioned `.patch` for an offline/CI build path.
 
 ## Build the sender
 
-Provision the fork at `~/Workspace/tooling/openscreen/openscreen` (shared location) and build:
+Provision the fork at `~/Workspace/tooling/openscreen-build/openscreen` (shared location) and build:
 
 ```bash
-git clone --branch wayland-h264-sender git@github.com:gianlucamazza/openscreen.git ~/Workspace/tooling/openscreen/openscreen
-cd ~/Workspace/tooling/openscreen/openscreen
+git clone --branch wayland-h264-sender git@github.com:gianlucamazza/openscreen.git ~/Workspace/tooling/openscreen-build/openscreen
+cd ~/Workspace/tooling/openscreen-build/openscreen
 gclient sync                                  # needs depot_tools on PATH (~GB of deps)
 gn gen out/Default --args="is_debug=false have_ffmpeg=true have_libsdl2=true have_libopus=true have_libvpx=true use_sysroot=false"
 ninja -C out/Default cast_sender
@@ -36,7 +36,7 @@ also build from upstream+patch without fork access):
 bash ~/Workspace/cast/native/integration/setup-openscreen.sh   # [--from-upstream]
 ```
 
-The resulting `~/Workspace/tooling/openscreen/openscreen/out/Default/cast_sender` is what
+The resulting `~/Workspace/tooling/openscreen-build/openscreen/out/Default/cast_sender` is what
 `cast-mirror` / `cast-screen` invoke (override the path via `$CAST_MIRROR_BIN`).
 
 ## System dependencies (Arch)
@@ -63,7 +63,7 @@ and push it there — that branch is the source of truth. Re-cut the derived pat
 in the `cast` repo afterwards:
 
 ```bash
-git -C ~/Workspace/tooling/openscreen/openscreen format-patch 7675ef66..wayland-h264-sender \
+git -C ~/Workspace/tooling/openscreen-build/openscreen format-patch 7675ef66..wayland-h264-sender \
   -o ~/Workspace/cast/native/integration/patches/
 # then update native/integration/openscreen.pin if the commits changed
 ```

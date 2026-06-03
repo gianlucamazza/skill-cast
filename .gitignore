@@ -1,6 +1,6 @@
 # The openscreen fork + GN/gclient build toolchain live OUTSIDE this plugin, at
-# ~/Workspace/tooling/openscreen/ (gclient root). The built sender binary is located
-# via $CAST_MIRROR_BIN (default tooling/openscreen/openscreen/out/Default/cast_sender).
+# ~/Workspace/tooling/openscreen-build/ (gclient root). The built sender binary is located
+# via $CAST_MIRROR_BIN (default tooling/openscreen-build/openscreen/out/Default/cast_sender).
 # Nothing build-related is tracked or bundled here — this repo is just the plugin.
 
 # editor / OS noise

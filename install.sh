@@ -16,7 +16,7 @@ REPO="$(dirname "$(readlink -f "$0")")"
 BIN_DIR="$HOME/.local/bin"
 SKILL_DIR="$HOME/.claude/skills/skill-cast"
 # openscreen build-workspace lives outside the plugin (heavy/gitignored); override with $CAST_MIRROR_BIN.
-SENDER="${CAST_MIRROR_BIN:-$HOME/Workspace/tooling/openscreen/openscreen/out/Default/cast_sender}"
+SENDER="${CAST_MIRROR_BIN:-$HOME/Workspace/tooling/openscreen-build/openscreen/out/Default/cast_sender}"
 
 log() { printf '%s\n' "$*"; }
 warn() { printf 'install: %s\n' "$*" >&2; }
