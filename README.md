@@ -92,7 +92,7 @@ Patched vendored files (small, deliberate edits):
 ## Build
 
 ```bash
-ninja -C ~/Workspace/skill-cast/openscreen/out/Default cast_sender
+ninja -C ~/Workspace/openscreen/out/Default cast_sender
 ```
 
 (GN was already bootstrapped via `depot_tools` + `gclient sync`; only re-run those if the tree
