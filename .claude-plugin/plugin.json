@@ -1,0 +1,10 @@
+{
+  "name": "skill-cast",
+  "description": "Cast media and mirror the screen to a Chromecast from Arch Linux + Hyprland, autonomously — catt media casting, a native low-latency Cast Streaming sender, and an HLS fallback.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Gianluca Mazza"
+  },
+  "homepage": "https://github.com/gianlucamazza/skill-cast",
+  "repository": "https://github.com/gianlucamazza/skill-cast"
+}

@@ -1,4 +1,4 @@
-# skill_cast — native Cast Streaming desktop mirror
+# skill-cast — native Cast Streaming desktop mirror
 
 Mirror the Hyprland (Wayland) desktop to a Chromecast / Google TV with **~120ms latency, 1080p,
 hardware H.264, real desktop audio, and no app installed on the TV** — by implementing a custom
@@ -11,30 +11,58 @@ remains as a fallback.
 
 ## Layout
 
+This repo is a **Claude Code plugin** (`.claude-plugin/plugin.json` + `skills/`):
+
 ```
-~/Workspace/skill_cast/
-├── README.md            ← this file
-├── bin/cast-mirror      ← native mirror launcher (start|stop|status); symlinked into ~/.local/bin
-├── bin/cast-screen      ← HLS fallback mirror; symlinked into ~/.local/bin
-├── bin/cast-resolve     ← per-LAN device resolver (shared by both); symlinked into ~/.local/bin
-├── skill/SKILL.md       ← Claude Code skill; symlinked into ~/.claude/skills/skill_cast/
-├── docs/plan.md         ← full phased design + decisions log
-├── depot_tools/         ← GN/gclient toolchain (vendored)
-└── openscreen/          ← openscreen source + build tree (vendored, 3.9G)
+~/Workspace/skill-cast/
+├── .claude-plugin/plugin.json       ← plugin manifest (name, version, …)
+├── skills/skill-cast/
+│   ├── SKILL.md                     ← the skill; symlinked into ~/.claude/skills/skill-cast/ (dev)
+│   └── scripts/
+│       ├── cast-mirror              ← native mirror launcher (start|stop|status)
+│       ├── cast-screen              ← HLS fallback mirror
+│       └── cast-resolve             ← per-LAN device resolver (shared by both)
+├── README.md · LICENSE · install.sh
+├── docs/plan.md                     ← full phased design + decisions log
+├── docs/openscreen-integration.md   ← rebuild the sender / regenerate the patch
+├── openscreen-integration/          ← sender patch + args.gn (the vendored tree itself is gitignored)
+├── depot_tools/         ← GN/gclient toolchain (vendored, gitignored)
+└── openscreen/          ← openscreen source + build tree (vendored, 3.9G, gitignored)
     ├── out/Default/cast_sender         ← the built sender binary
     └── cast/standalone_sender/         ← where our code lives (see below)
 ```
 
-`~/.local/bin/{cast-mirror,cast-screen,cast-resolve}` and `~/.claude/skills/skill_cast/SKILL.md`
-are **symlinks** back into this project, so this folder is the single source of truth.
+In **dev**, `install.sh` symlinks `skills/skill-cast/scripts/*` onto `PATH` (`~/.local/bin`) and
+the skill into `~/.claude/skills/skill-cast/` (invoked as `/skill-cast`). As a **plugin**, the
+same `skills/` tree loads via the manifest (invoked as `/skill-cast:skill-cast`); the scripts run
+from `${CLAUDE_PLUGIN_ROOT}/skills/skill-cast/scripts/`.
 
-## Device selection (`bin/cast-resolve`)
+## Setup
+
+```bash
+git clone <repo-url> ~/Workspace/skill-cast
+cd ~/Workspace/skill-cast
+./install.sh                 # local-dev: symlink scripts onto PATH + skill into ~/.claude/skills (idempotent)
+```
+
+To exercise it **as a plugin** instead of the dev symlinks: `claude --plugin-dir .` (validate with
+`claude plugin validate .`). Use one mode at a time.
+
+`install.sh` does not build the native sender (heavy, opt-in). If
+`openscreen/out/Default/cast_sender` is missing, build it per
+[docs/openscreen-integration.md](docs/openscreen-integration.md) — the `cast-screen` HLS fallback
+works without it. For runtime dependencies see `skills/skill-cast/SKILL.md` (STEP 0).
+
+Licensed BSD 3-Clause (see [LICENSE](LICENSE)); the sender is derived from openscreen, also
+BSD 3-Clause.
+
+## Device selection (`cast-resolve`)
 
 Both launchers resolve the target Chromecast through `cast-resolve` instead of taking the first
 `catt scan` hit. It keys the current LAN by the **default-gateway MAC** (stable across DHCP,
 wifi+ethernet, ignores docker/virbr/tailscale) and resolves: explicit override (`CAST_DEVICE`) →
 per-LAN map → global default → single-device auto → **exit 3 (fail loud, lists candidates)** when
-ambiguous. Config: `~/.config/skill_cast/devices.json` (device by name; atomic writes). Register a
+ambiguous. Config: `~/.config/skill-cast/devices.json` (device by name; atomic writes). Register a
 LAN with `cast-resolve register "<name>" --label <where>` (also syncs catt's `set_default`). See
 SKILL.md for the full ladder and exit codes (3 ambiguous / 4 none / 5 preferred-absent).
 
@@ -64,7 +92,7 @@ Patched vendored files (small, deliberate edits):
 ## Build
 
 ```bash
-ninja -C ~/Workspace/skill_cast/openscreen/out/Default cast_sender
+ninja -C ~/Workspace/skill-cast/openscreen/out/Default cast_sender
 ```
 
 (GN was already bootstrapped via `depot_tools` + `gclient sync`; only re-run those if the tree

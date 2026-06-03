@@ -49,7 +49,7 @@ The Hyprland protocol xml (`hyprland-toplevel-mapping-v1.xml`) is already in the
 ## Rebuild from scratch
 
 ```bash
-cd ~/Workspace/skill_cast
+cd ~/Workspace/skill-cast
 
 # 1. clone openscreen + bootstrap deps (depot_tools provides gn/ninja/gclient)
 git clone https://chromium.googlesource.com/openscreen

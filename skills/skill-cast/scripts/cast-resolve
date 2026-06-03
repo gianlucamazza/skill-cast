@@ -30,9 +30,9 @@
 # Deps: catt, jq, ip (iproute2), ping (iputils) — all already present. No new deps.
 set -euo pipefail
 
-CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/skill_cast"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/skill-cast"
 CONFIG="$CONFIG_DIR/devices.json"
-STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/skill_cast"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/skill-cast"
 SCAN_CACHE="$STATE_DIR/scan-cache.json"
 SCAN_TTL=15                                   # seconds; catt scan is the slow part
 CATT_CFG="${XDG_CONFIG_HOME:-$HOME/.config}/catt/catt.cfg"
@@ -71,7 +71,7 @@ fingerprint() {
       | jq -r 'map(select(.lladdr))[0].lladdr // ""')"
   fi
   [[ -z "$mac" ]] && { printf 'unknown'; return; }
-  printf 'gw:%s' "$(printf '%s' "$mac" | tr 'A-Z' 'a-z')"
+  printf 'gw:%s' "$(printf '%s' "$mac" | tr '[:upper:]' '[:lower:]')"
 }
 
 # --- config -----------------------------------------------------------------
@@ -207,6 +207,8 @@ do_register() {
   [[ "$key" == unknown ]] && \
     die "cannot identify this LAN (no default-route gateway MAC); connect to the network first"
 
+  # $k/$d/$l are jq variables (--arg), not shell — single quotes are correct.
+  # shellcheck disable=SC2016
   config_write --arg k "$key" --arg d "$name" --arg l "$label" \
     '.networks[$k] = ({device:$d} + (if $l=="" then {} else {label:$l} end))
      | (if .default_device=="" then .default_device=$d else . end)'

@@ -20,7 +20,7 @@
 # Deps: wf-recorder, ffmpeg (h264_vaapi), python, catt, hyprctl, ufw, ip, jq.
 set -euo pipefail
 
-STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/skill_cast"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/skill-cast"
 HLS_DIR="$STATE_DIR/hls"
 SESSION="$STATE_DIR/session.json"
 MIRROR_PORT="${CAST_SCREEN_PORT:-8910}"
@@ -247,7 +247,7 @@ do_start() {
   until [[ -f "$HLS_DIR/stream.m3u8" ]]; do
     sleep 0.3; i=$((i+1))
     [[ $i -gt 40 ]] && cleanup_fail
-    alive "$wf_pid" && alive "$ff_pid" || cleanup_fail
+    if ! alive "$wf_pid" || ! alive "$ff_pid"; then cleanup_fail; fi
   done
 
   # 4) cast as LIVE (catt only casts BUFFERED, which stalls an endless stream).

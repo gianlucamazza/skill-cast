@@ -1,22 +1,21 @@
 ---
-name: skill_cast
+name: skill-cast
 description: >
   Cast media and mirror the screen to a Chromecast from Arch Linux + Hyprland, autonomously.
   Use when the user wants to cast a local video/audio file or a URL (YouTube, direct link) to
   the TV, mirror their desktop live on the Chromecast, control playback (play/pause/stop/volume),
   list cast devices, or check/stop what's currently casting. Backed by `catt` for media, a
-  native low-latency Cast Streaming sender (helper `~/.local/bin/cast-mirror`, ~120ms, hardware
+  native low-latency Cast Streaming sender (helper `cast-mirror`, ~120ms, hardware
   H.264 + real desktop audio) as the primary live mirror, and a wf-recorder→ffmpeg→HLS→catt
-  pipeline (helper `~/.local/bin/cast-screen`, ~3-6s) as a fallback. Trigger keywords: chromecast,
+  pipeline (helper `cast-screen`, ~3-6s) as a fallback. Trigger keywords: chromecast,
   cast, casta, screensharing, screen mirror, mirror screen, specchia schermo, manda sulla TV,
   send to TV, cast video, cast youtube, stop casting, cosa sta castando, screen share,
   cast window, casta finestra, mirror a window, specchia finestra, casta questa finestra.
 ---
 
-# skill_cast — Chromecast media casting + live screen mirror
+# skill-cast — Chromecast media casting + live screen mirror
 
 Manage Chromecast from this Hyprland/Wayland laptop with no manual UI and **no portal picker**.
-Project lives in `~/Workspace/skill_cast/` (this skill is a symlink into it; see its `README.md`).
 Three backends behind one skill:
 
 - **Media casting** (`catt`) — streams a local file or URL to the Chromecast's default media
@@ -26,6 +25,20 @@ Three backends behind one skill:
   **~120ms latency, 1080p, no app on the TV.** This is the **primary live-mirror mode**.
 - **HLS screen mirror** (`cast-screen`) — wf-recorder→ffmpeg→HLS→catt. ~3–6s latency, more
   moving parts (HTTP server + firewall). **Fallback only**, if the native sender won't run.
+
+## Locating the helpers
+
+The three helpers (`cast-resolve`, `cast-mirror`, `cast-screen`) are written below as bare
+names. Resolve them this way — **run `command -v cast-mirror` once**:
+- **found** (local-dev install: `install.sh` symlinks them into `~/.local/bin`) → call them by
+  bare name, exactly as written.
+- **not found** (running as an installed plugin) → they live at
+  `${CLAUDE_PLUGIN_ROOT}/skills/skill-cast/scripts/`; prefix every call with that dir, e.g.
+  `"${CLAUDE_PLUGIN_ROOT}/skills/skill-cast/scripts/cast-mirror" start`.
+
+The three resolve each other as siblings (same `scripts/` dir), so only the entry call needs the
+prefix. The native sender binary is **not** bundled (3.9G build tree); for the native mirror set
+`$CAST_MIRROR_BIN` or run from a dev clone that has built it — otherwise use the HLS fallback.
 
 ## STEP 0 — Self-check (run once, or when something fails)
 
@@ -38,8 +51,8 @@ Three backends behind one skill:
   or re-run with `CAST_DEVICE="<name>"`. Exit 4 = no devices on this LAN; exit 5 = the preferred
   device isn't on this LAN.
 - **Native mirror** needs the prebuilt sender binary
-  `~/Workspace/skill_cast/openscreen/out/Default/cast_sender` (override via `$CAST_MIRROR_BIN`).
-  If it's missing, rebuild: `ninja -C ~/Workspace/skill_cast/openscreen/out/Default cast_sender`.
+  `~/Workspace/skill-cast/openscreen/out/Default/cast_sender` (override via `$CAST_MIRROR_BIN`).
+  If it's missing, rebuild: `ninja -C ~/Workspace/skill-cast/openscreen/out/Default cast_sender`.
   It needs VAAPI (`/dev/dri/renderD128`, H.264 encode) and PipeWire for audio — both present
   here. **No firewall setup required** (the sender initiates the UDP/RTP flow outbound to the
   TV, so conntrack lets the return traffic back in).
@@ -49,29 +62,29 @@ Three backends behind one skill:
 
 ## Arguments
 
-- `/skill_cast` or `/skill_cast devices` → `cast-resolve list` (fingerprint + mapping + scan
+- `/skill-cast` or `/skill-cast devices` → `cast-resolve list` (fingerprint + mapping + scan
   candidates); plain `catt scan` if the user just wants raw discovery.
-- `/skill_cast file <path>` → cast a local media file.
-- `/skill_cast url <link>` → cast a URL / YouTube link.
-- `/skill_cast stream [output]` → start the **native** low-latency desktop mirror (preferred).
-- `/skill_cast window [hint]` → mirror a **single window** (native sender). Prefer this when the
+- `/skill-cast file <path>` → cast a local media file.
+- `/skill-cast url <link>` → cast a URL / YouTube link.
+- `/skill-cast stream [output]` → start the **native** low-latency desktop mirror (preferred).
+- `/skill-cast window [hint]` → mirror a **single window** (native sender). Prefer this when the
   user names an app/window instead of "the screen". See Mode B → Window capture.
-- `/skill_cast screen [output]` → start the **HLS fallback** mirror (only if native won't run).
-- `/skill_cast status` → what's casting right now.
-- `/skill_cast control play|pause|stop|volume <0-100>` → playback control.
-- `/skill_cast stop` → stop everything (native mirror, HLS pipeline, or `catt stop`).
-- `/skill_cast prefer [name]` → `cast-resolve register [name] --label <hint>`: persist the
+- `/skill-cast screen [output]` → start the **HLS fallback** mirror (only if native won't run).
+- `/skill-cast status` → what's casting right now.
+- `/skill-cast control play|pause|stop|volume <0-100>` → playback control.
+- `/skill-cast stop` → stop everything (native mirror, HLS pipeline, or `catt stop`).
+- `/skill-cast prefer [name]` → `cast-resolve register [name] --label <hint>`: persist the
   preferred device for the **current LAN** (and sync catt's own default).
 
 ## Device selection (`cast-resolve`)
 
-`~/Workspace/skill_cast/bin/cast-resolve` (symlinked to `~/.local/bin`) is the single source of
+`cast-resolve` (bundled in `scripts/`; on `PATH` in dev) is the single source of
 truth for *which* Chromecast every cast targets. It identifies the current LAN by the **default
 gateway's MAC** (stable across DHCP, works on wifi+ethernet, immune to docker/virbr/tailscale
 interfaces) and resolves via a strict ladder — **never the "first responder"**:
 
 1. explicit override — `CAST_DEVICE` env or `--device <name>`
-2. network match — gateway-MAC key in `~/.config/skill_cast/devices.json` `.networks`
+2. network match — gateway-MAC key in `~/.config/skill-cast/devices.json` `.networks`
 3. global default — `devices.json` `.default_device` (seeded once from `catt.cfg`)
 4. single-device auto — exactly one device on the LAN
 5. ambiguous (≥2, no preference) → **exit 3**, lists candidates, casts nothing
@@ -83,7 +96,7 @@ cast-resolve register [name] [--label home]   # map THIS LAN -> name (atomic) + 
 cast-resolve list       # fingerprint, default, per-LAN mapping, scan candidates
 ```
 
-Config lives at `~/.config/skill_cast/devices.json` (device stored by **name**, never IP). On a
+Config lives at `~/.config/skill-cast/devices.json` (device stored by **name**, never IP). On a
 new LAN with its own TV, run `cast-resolve register "<name>" --label <where>` once and it's
 remembered. A VPN-only / unknown LAN falls back to the global default. Pass `-d "<name>"` to a
 bare `catt` command only to override for one call.
@@ -121,7 +134,7 @@ cast-mirror stop             # stop the sender; the TV returns to idle
 What `start` does: tear down any prior session, resolve the output (arg or `hyprctl monitors -j`),
 find the Chromecast (`catt scan`), then launch the openscreen sender:
 `cast_sender -c h264 -m 16000000 <tv-ip>:8009 "screen:<output>"`, recording its PID in
-`~/.local/state/skill_cast/mirror.json`. It verifies the sender survives negotiation (the TV
+`~/.local/state/skill-cast/mirror.json`. It verifies the sender survives negotiation (the TV
 must accept the H.264 OFFER — this TV does) and tails the log on failure. Desktop **audio is
 automatic** (PipeWire default-sink monitor → Opus); it mirrors *everything* the desktop plays.
 
@@ -189,7 +202,7 @@ enumerates/activates workspaces — it yields no pixel buffer. And on a single-m
 ## Mode C — HLS screen mirror (cast-screen, fallback)
 
 Only when the native sender can't run (e.g. binary missing and no time to rebuild, or the TV
-rejects the Cast Streaming OFFER). Orchestrated by `~/.local/bin/cast-screen`:
+rejects the Cast Streaming OFFER). Orchestrated by `cast-screen`:
 
 ```bash
 cast-screen start            # mirror the first Hyprland monitor

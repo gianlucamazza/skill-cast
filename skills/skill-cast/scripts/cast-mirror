@@ -18,12 +18,14 @@
 # jq, ip. The TV must expose Cast mirroring (Chromecast built-in / Google TV).
 set -euo pipefail
 
-STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/skill_cast"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/skill-cast"
 SESSION="$STATE_DIR/mirror.json"
 LOG="$STATE_DIR/mirror.log"
 
-# The openscreen sender binary (built from ~/Workspace/skill_cast/openscreen).
-BIN="${CAST_MIRROR_BIN:-$HOME/Workspace/skill_cast/openscreen/out/Default/cast_sender}"
+# The openscreen sender binary. NOT bundled/distributable (3.9G build tree): set
+# $CAST_MIRROR_BIN, or build it in a dev clone (see docs/openscreen-integration.md).
+# Default is the dev-clone build path.
+BIN="${CAST_MIRROR_BIN:-$HOME/Workspace/skill-cast/openscreen/out/Default/cast_sender}"
 BITRATE="${CAST_MIRROR_BITRATE:-16000000}"   # max bitrate ceiling (CQP floats below)
 PORT=8009                                     # Cast castv2 TLS port on the TV
 CATT="$(command -v catt || echo "$HOME/.local/bin/catt")"

@@ -1,4 +1,7 @@
-# skill_cast — Native Cast screen mirroring (Cast Streaming protocol), max performance
+# skill-cast — Native Cast screen mirroring (Cast Streaming protocol), max performance
+
+> Design history & phased plan (Italian working notes). User docs → [`../README.md`](../README.md);
+> rebuilding the sender → [`openscreen-integration.md`](openscreen-integration.md).
 
 ## Context
 
@@ -93,12 +96,12 @@ di openscreen) come secondo stream.
 
 ## Artefatti
 
-1. **`~/Workspace/skill_cast/`** — qui sì autoriamo il progetto (codice C++ + build), come
+1. **`~/Workspace/skill-cast/`** — qui sì autoriamo il progetto (codice C++ + build), come
    suggerito dall'utente in apertura: è codice vero, versionabile, non un semplice SKILL.md.
    - `src/` (capture wlr-screencopy, encoder VAAPI, glue openscreen sender), `meson.build`
      o `CMakeLists.txt`, `third_party/openscreen` (submodule/build), `README.md`.
    - Output: `cast-mirror` installato in `~/.local/bin/`.
-2. **`~/.claude/skills/skill_cast/SKILL.md`** — aggiornata: nuovo modo `stream` (Cast
+2. **`~/.claude/skills/skill-cast/SKILL.md`** — aggiornata: nuovo modo `stream` (Cast
    mirroring nativo, low-latency) come modo primario per il mirror; `cast-mirror start|stop|
    status`. `catt` resta per media/URL casting (host-initiated, ortogonale, utile). Il
    vecchio mirror HLS (`cast-screen`) **declassato a fallback** "no-app, ~3s, autonomo".
@@ -249,7 +252,7 @@ Mappa seam confermata leggendo i file:
 **Cosa misurare e da dove (nessun nuovo collector — riusiamo quello di openscreen):**
 1. **fps / EndToEnd / encode-time**: già emessi periodicamente nel sender log dal collector di
    statistiche integrato di openscreen (è la fonte dei numeri storici 28fps / 147ms / 402ms).
-   `cast-mirror start`, poi leggere le righe di stats nel log (`~/.local/state/skill_cast/mirror.log`).
+   `cast-mirror start`, poi leggere le righe di stats nel log (`~/.local/state/skill-cast/mirror.log`).
 2. **CPU per-thread**: `top -H -p <pid>` o `pidstat -t -p <pid> 1` mentre gira → separa il
    **thread ScreenCapturer** (swscale Lanczos) dal **thread main TaskRunner** (upload + encode
    dispatch). Capture-thread alto ⇒ Lanczos domina ⇒ VPP/zero-copy paga; main-thread alto ⇒
@@ -388,7 +391,7 @@ validare a step (cattura dmabuf → import → VPP → encode), tenendo il fallb
 ### Context
 A valle della misura 4d-0 e del micro-tuning (playout 120ms), l'utente chiede di **consolidare
 tutto**: progetto, memorie e discoveries. Survey read-only dei tre archivi → stato:
-- **Progetto** `~/Workspace/skill_cast/`: README.md, skill/SKILL.md, bin/cast-mirror aggiornati
+- **Progetto** `~/Workspace/skill-cast/`: README.md, skill/SKILL.md, bin/cast-mirror aggiornati
   oggi (✓). Unico stale: **`docs/plan.md`** (snapshot 01:28, pre-misura) fuori sync col piano
   canonico. Niente git repo (vendored 4.7GB → fuori scope, non si versiona).
 - **Memorie** (auto-memory `…-Workspace-skill-cast/memory/`): `skill-cast-native-mirror.md` già
@@ -405,7 +408,7 @@ research `active` → solo nota vault, `card: null`; `_index.md` è auto-datavie
 **A. Progetto — refresh snapshot**
 - Copiare il piano canonico `~/.claude/plans/stiamo-progettando-una-skill-enchanted-nova.md`
   (questo file, con la sezione 4d-0 + questo Consolidamento) su
-  `~/Workspace/skill_cast/docs/plan.md`, riallineando lo snapshot.
+  `~/Workspace/skill-cast/docs/plan.md`, riallineando lo snapshot.
 
 **B. Memorie — cross-link**
 - `…-Workspace-skill-cast/memory/skill-cast-native-mirror.md`: aggiungere una riga che punta alle
@@ -440,7 +443,7 @@ C2. **Research tecnica** (vault-only, no card):
   `[[bp-protocol-level-diagnosis]]`.
 
 ### Verifica (post-esecuzione)
-- `diff ~/.claude/plans/…nova.md ~/Workspace/skill_cast/docs/plan.md` → identici.
+- `diff ~/.claude/plans/…nova.md ~/Workspace/skill-cast/docs/plan.md` → identici.
 - Le due note vault hanno frontmatter valido (campi `type/kind/status/card/confidence/source/
   reviewed/created/updated`); compaiono nella dataview «Attive» di `_index.md`.
 - La card `kb_ws-measure-before-optimizing.md` esiste e ha una riga in MEMORY.md globale →
