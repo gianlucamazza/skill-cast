@@ -70,6 +70,11 @@ ninja -C ~/Workspace/skill_cast/openscreen/out/Default cast_sender
 (GN was already bootstrapped via `depot_tools` + `gclient sync`; only re-run those if the tree
 is reconfigured.)
 
+The `openscreen/` clone is **gitignored** (it's upstream, not ours). Our sender + Cast-protocol
+changes and the build config are versioned as a patch + `args.gn` under `openscreen-integration/`
+— see [docs/openscreen-integration.md](docs/openscreen-integration.md) to rebuild from a fresh
+clone or to regenerate the patch after editing the sender.
+
 ## Run
 
 ```bash
