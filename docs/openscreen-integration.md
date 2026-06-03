@@ -25,6 +25,27 @@ Upstream pin (the commit the patch applies onto):
 > **patch is the canonical, backed-up form** of our work — it's verified to recreate
 > `3ac69361` byte-for-byte (`git am` onto `origin/main` → empty diff).
 
+## System dependencies (Arch)
+
+Needed to build/link the sender (the generated protocol `.c/.h` are already in the patch,
+so a normal build does **not** invoke wayland-scanner — only editing a protocol does):
+
+```bash
+sudo pacman -S --needed ffmpeg pipewire opus libva wayland wayland-protocols ninja
+#   ffmpeg          -> h264_vaapi encode + libswscale downscale
+#   libva + driver  -> VAAPI H.264 (intel-media-driver on Iris Xe; mesa for AMD)
+#   pipewire        -> desktop / per-app audio capture (headers ship with the package)
+#   opus            -> audio encode
+#   wayland         -> libwayland-client + wayland-scanner (only for regen)
+#   wayland-protocols -> the ext-*-v1.xml sources (only for regen)
+sudo pacman -S --needed intel-media-driver    # Intel iGPU; AMD: libva-mesa-driver
+```
+
+`gn` is **not** packaged in the official repos — it comes from the vendored `depot_tools/`
+(put it on `PATH`, or use the AUR `gn` package). `ninja` is the distro package above.
+The Hyprland protocol xml (`hyprland-toplevel-mapping-v1.xml`) is already in the patch, so
+`hyprland-protocols` is not required.
+
 ## Rebuild from scratch
 
 ```bash
