@@ -61,6 +61,14 @@ lan_subnet() { printf '%s.0/24' "$(lan_ip "" | cut -d. -f1-3)"; }
 default_output() { hyprctl monitors -j 2>/dev/null | jq -r '.[0].name' 2>/dev/null; }
 
 alive() { [[ -n "${1:-}" ]] && kill -0 "$1" 2>/dev/null; }
+# Optional desktop notification (freedesktop, daemon-agnostic). No-op if notify-send
+# is absent, so it stays an optdepend, not a hard dependency. The synchronous hint
+# coalesces successive cast toasts instead of stacking them.
+notify() {
+  command -v notify-send >/dev/null 2>&1 || return 0
+  local urg="$1"; shift
+  notify-send -a cast -u "$urg" -h string:x-canonical-private-synchronous:cast "$@"
+}
 
 # Generate the companion python scripts: a LIVE caster and a CORS+MIME HLS server.
 write_helpers() {
@@ -198,7 +206,7 @@ do_start() {
   [[ -z "$output" || "$output" == "null" ]] && die "could not determine output (pass one explicitly)"
 
   local cc ip url
-  cc="$(chromecast_ip)"
+  cc="$(chromecast_ip)" || { notify critical "No cast device found"; die "no Chromecast found (catt scan)"; }
   ip="$(lan_ip "$cc")"
   url="http://$ip:$MIRROR_PORT/stream.m3u8"
 
@@ -210,6 +218,7 @@ do_start() {
   cleanup_fail() {
     for p in "$http_pid" "$ff_pid" "$wf_pid"; do alive "$p" && kill "$p" 2>/dev/null || true; done
     rm -f "$fifo"; rm -rf "$HLS_DIR"
+    notify critical "Cast failed" "$output"
     die "startup failed — dismantled pipeline"
   }
   trap cleanup_fail ERR
@@ -260,6 +269,7 @@ do_start() {
     "$url" "$output" "$MIRROR_PORT" "$wf_pid" "$ff_pid" "$http_pid" > "$SESSION"
 
   log "cast-screen: mirroring $output -> $url"
+  notify normal "Casting started" "$output -> $cc (HLS)"
 }
 
 # --- dispatch ---------------------------------------------------------------
@@ -268,7 +278,7 @@ mkdir -p "$STATE_DIR"
 cmd="${1:-status}"; shift || true
 case "$cmd" in
   start)        do_start "$@" ;;
-  stop)         do_stop ;;
+  stop)         had=0; [[ -f "$SESSION" ]] && had=1; do_stop; [[ "$had" -eq 1 ]] && notify low "Casting stopped" ;;
   status)       do_status ;;
   fw-setup)     fw_setup ;;
   fw-teardown)  fw_teardown ;;

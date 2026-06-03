@@ -59,6 +59,9 @@ prefix. The native sender binary is **not** bundled (3.9G build tree); for the n
 - **HLS fallback only**: needs `cast-screen fw-setup` once (ufw, LAN-scoped rules for `8910/tcp`
   + catt's `45000:47000/tcp`), plus `wf-recorder`, `ffmpeg` (`h264_vaapi`), `python`, `jq`,
   `hyprctl`. Local-file `catt` casting also needs that ufw rule (the TV pulls the file from us).
+- **Optional**: `notify-send` (libnotify) — if present, `cast-mirror`/`cast-screen` emit
+  freedesktop desktop notifications on start/stop/failure. Absent → silently skipped, not a
+  hard dependency.
 
 ## Arguments
 
