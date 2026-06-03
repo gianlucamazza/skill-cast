@@ -1,16 +1,11 @@
-# Vendored Cast Streaming lib (3.9G) and GN/gclient toolchain (805M): do not track.
-# openscreen/ is its OWN git clone — our sender sources live there and are versioned
-# on a dedicated branch inside that repo (cast/standalone_sender/), not duplicated here.
-/openscreen
-/depot_tools
-
-# gclient / cipd build metadata
-/.cipd/
-/.gclient
-/.gclient_entries
-/.gclient_previous_*
-/.gcs_entries
+# The openscreen fork + GN/gclient build toolchain live OUTSIDE this plugin, at
+# ~/Workspace/tooling/openscreen/ (gclient root). The built sender binary is located
+# via $CAST_MIRROR_BIN (default tooling/openscreen/openscreen/out/Default/cast_sender).
+# Nothing build-related is tracked or bundled here — this repo is just the plugin.
 
 # editor / OS noise
 *.swp
 .DS_Store
+
+# stale tool caches
+/.ruff_cache/
