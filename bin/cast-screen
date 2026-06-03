@@ -1,0 +1,276 @@
+#!/usr/bin/env bash
+# cast-screen — live mirror the Hyprland desktop to a Chromecast (no Wayland portal).
+#
+# Pipeline:  wf-recorder (wlr-screencopy + VAAPI h264) --> FIFO (matroska)
+#            --> ffmpeg (remux, -c copy) --> HLS segments in tmpfs
+#            --> python http.server on the LAN IP --> catt cast <m3u8 url>
+#
+# Subcommands:
+#   start [output] [--audio]   start the live mirror
+#   stop                       tear the mirror down
+#   status                     show pipeline + catt status
+#   fw-setup                   add persistent ufw rules (LAN-scoped) for casting
+#   fw-teardown                remove those ufw rules
+#
+# Firewall: this host uses ufw. Casting needs inbound TCP from the LAN to reach
+# both the mirror server (MIRROR_PORT) and catt's local file server (catt picks a
+# random port in CATT_RANGE). fw-setup opens both, scoped to the LAN subnet, once.
+# Requires passwordless sudo for ufw (verified on this machine).
+#
+# Deps: wf-recorder, ffmpeg (h264_vaapi), python, catt, hyprctl, ufw, ip, jq.
+set -euo pipefail
+
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/skill_cast"
+HLS_DIR="$STATE_DIR/hls"
+SESSION="$STATE_DIR/session.json"
+MIRROR_PORT="${CAST_SCREEN_PORT:-8910}"
+CATT_RANGE="45000:47000"               # catt/stream_info.py: random.randrange(45000,47000)
+VAAPI_DEVICE="${CAST_SCREEN_VAAPI:-/dev/dri/renderD128}"
+CATT="$(command -v catt || echo "$HOME/.local/bin/catt")"
+# Shared device resolver (sits beside this script in the repo bin/).
+RESOLVE="$(dirname "$(readlink -f "$0")")/cast-resolve"
+# pychromecast lives in catt's pipx venv; used to cast with stream_type=LIVE (catt only does
+# BUFFERED, which a default receiver mishandles for an endless live stream).
+CATT_PY="${CAST_SCREEN_PY:-$HOME/.local/share/pipx/venvs/catt/bin/python}"
+[[ -x "$CATT_PY" ]] || CATT_PY="$(command -v python3 || command -v python)"
+
+log()  { printf '%s\n' "$*" >&2; }
+die()  { log "cast-screen: $*"; exit 1; }
+have() { command -v "$1" >/dev/null 2>&1 || die "missing dependency: $1"; }
+
+# --- network helpers --------------------------------------------------------
+
+# Resolve the target Chromecast IP via the shared resolver (per-LAN preference,
+# deterministic; never "first responder"). Also the IP the LAN source-IP and the
+# LIVE cast target are derived from. Propagates the resolver's exit code.
+chromecast_ip() { "$RESOLVE" --ip; }
+
+# LAN IP the Chromecast can reach back to (NOT localhost).
+lan_ip() {
+  local cc="${1:-}" ip=""
+  [[ -n "$cc" ]] && ip="$(ip -4 route get "$cc" 2>/dev/null | grep -oP 'src \K[0-9.]+' | head -1)"
+  [[ -z "$ip" ]] && ip="$(ip -4 route get 8.8.8.8 2>/dev/null | grep -oP 'src \K[0-9.]+' | head -1)"
+  [[ -z "$ip" ]] && die "could not determine LAN IP"
+  printf '%s' "$ip"
+}
+
+# LAN subnet (/24) derived from the host LAN IP, e.g. 192.168.1.0/24.
+lan_subnet() { printf '%s.0/24' "$(lan_ip "" | cut -d. -f1-3)"; }
+
+# Default Hyprland output name (e.g. eDP-1) unless one was passed.
+default_output() { hyprctl monitors -j 2>/dev/null | jq -r '.[0].name' 2>/dev/null; }
+
+alive() { [[ -n "${1:-}" ]] && kill -0 "$1" 2>/dev/null; }
+
+# Generate the companion python scripts: a LIVE caster and a CORS+MIME HLS server.
+write_helpers() {
+  cat > "$STATE_DIR/cast_live.py" <<'PY'
+import sys, time, pychromecast
+ip, url = sys.argv[1], sys.argv[2]
+casts, _ = pychromecast.get_chromecasts()
+cc = next((c for c in casts if c.cast_info.host == ip), None) or (casts[0] if casts else None)
+if not cc:
+    sys.exit("no chromecast found")
+cc.wait()
+mc = cc.media_controller
+# HLS is adaptive + endless -> cast as LIVE with the right content type.
+mc.play_media(url, "application/vnd.apple.mpegurl", stream_type="LIVE")
+mc.block_until_active(timeout=15)
+for _ in range(20):
+    time.sleep(1); mc.update_status()
+    st = mc.status.player_state
+    if st in ("PLAYING", "BUFFERING"):
+        print("ok:", st); break
+    if mc.status.idle_reason == "ERROR":
+        sys.exit("receiver error")
+else:
+    sys.exit("did not start (state=%s)" % mc.status.player_state)
+PY
+  cat > "$STATE_DIR/serve.py" <<'PY'
+import http.server, socketserver, sys, os
+root, host, port = sys.argv[1], sys.argv[2], int(sys.argv[3])
+os.chdir(root)
+class H(http.server.SimpleHTTPRequestHandler):
+    # Google Cast adaptive streaming (HLS/DASH) is fetched via XHR and REQUIRES CORS;
+    # without these headers the receiver fails with idle_reason=ERROR. Also fix .ts MIME
+    # (stdlib maps it to text/vnd.trolltech.linguist on Arch).
+    extensions_map = {**http.server.SimpleHTTPRequestHandler.extensions_map,
+                      ".m3u8": "application/vnd.apple.mpegurl", ".ts": "video/mp2t"}
+    def end_headers(self):
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Range, Accept-Encoding")
+        self.send_header("Access-Control-Expose-Headers", "Content-Length, Content-Range")
+        super().end_headers()
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.end_headers()
+    def log_message(self, *a): pass
+socketserver.ThreadingTCPServer.allow_reuse_address = True
+with socketserver.ThreadingTCPServer((host, port), H) as httpd:
+    httpd.serve_forever()
+PY
+}
+
+# --- firewall (ufw) ---------------------------------------------------------
+
+fw_rule_present() {
+  sudo -n ufw status 2>/dev/null | grep -q "$MIRROR_PORT/tcp"
+}
+
+fw_setup() {
+  have ufw
+  local net; net="$(lan_subnet)"
+  sudo -n ufw allow from "$net" to any port "$MIRROR_PORT" proto tcp >/dev/null
+  sudo -n ufw allow from "$net" to any port "$CATT_RANGE" proto tcp >/dev/null
+  log "cast-screen: ufw rules added for $net -> $MIRROR_PORT/tcp, $CATT_RANGE/tcp"
+}
+
+fw_teardown() {
+  have ufw
+  local net; net="$(lan_subnet)"
+  sudo -n ufw delete allow from "$net" to any port "$MIRROR_PORT" proto tcp >/dev/null 2>&1 || true
+  sudo -n ufw delete allow from "$net" to any port "$CATT_RANGE" proto tcp >/dev/null 2>&1 || true
+  log "cast-screen: ufw casting rules removed."
+}
+
+# --- stop -------------------------------------------------------------------
+
+do_stop() {
+  "$CATT" stop >/dev/null 2>&1 || true
+  if [[ -f "$SESSION" ]]; then
+    local http ff wf
+    http="$(jq -r '.http_pid // empty'   "$SESSION")"
+    ff="$(jq -r '.ffmpeg_pid // empty'    "$SESSION")"
+    wf="$(jq -r '.wf_pid // empty'        "$SESSION")"
+    for p in "$http" "$ff" "$wf"; do alive "$p" && kill "$p" 2>/dev/null || true; done
+    sleep 0.3
+    for p in "$http" "$ff" "$wf"; do alive "$p" && kill -9 "$p" 2>/dev/null || true; done
+    rm -f "$SESSION"
+  fi
+  rm -rf "$HLS_DIR"
+  log "cast-screen: stopped."
+}
+
+# --- status -----------------------------------------------------------------
+
+do_status() {
+  if [[ ! -f "$SESSION" ]]; then
+    log "cast-screen: no active mirror session."
+    "$CATT" status 2>/dev/null || true
+    return 0
+  fi
+  local url wf ff http
+  url="$(jq -r '.url'       "$SESSION")"
+  wf="$(jq -r '.wf_pid'     "$SESSION")"
+  ff="$(jq -r '.ffmpeg_pid' "$SESSION")"
+  http="$(jq -r '.http_pid' "$SESSION")"
+  log "mirror url : $url"
+  log "wf-recorder: $(alive "$wf" && echo "up ($wf)" || echo down)"
+  log "ffmpeg     : $(alive "$ff" && echo "up ($ff)" || echo down)"
+  log "http.server: $(alive "$http" && echo "up ($http)" || echo down)"
+  log "---"
+  "$CATT" status 2>/dev/null || true
+}
+
+# --- start ------------------------------------------------------------------
+
+do_start() {
+  local output="" audio=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --audio) audio=1 ;;
+      *)       output="$1" ;;
+    esac
+    shift
+  done
+
+  have wf-recorder; have ffmpeg; have python; have jq; have hyprctl
+  [[ -x "$CATT" ]] || die "catt not found (pipx install catt)"
+  [[ -x "$RESOLVE" ]] || die "cast-resolve not found beside cast-screen: $RESOLVE"
+
+  # Idempotent: tear down any previous session first.
+  [[ -f "$SESSION" ]] && do_stop
+  # Ensure firewall lets the Chromecast reach the mirror port.
+  fw_rule_present || fw_setup
+
+  [[ -z "$output" ]] && output="$(default_output)"
+  [[ -z "$output" || "$output" == "null" ]] && die "could not determine output (pass one explicitly)"
+
+  local cc ip url
+  cc="$(chromecast_ip)"
+  ip="$(lan_ip "$cc")"
+  url="http://$ip:$MIRROR_PORT/stream.m3u8"
+
+  mkdir -p "$HLS_DIR"
+  local fifo="$STATE_DIR/cap.mkv"
+  rm -f "$fifo"; mkfifo "$fifo"
+
+  local wf_pid="" ff_pid="" http_pid=""
+  cleanup_fail() {
+    for p in "$http_pid" "$ff_pid" "$wf_pid"; do alive "$p" && kill "$p" 2>/dev/null || true; done
+    rm -f "$fifo"; rm -rf "$HLS_DIR"
+    die "startup failed — dismantled pipeline"
+  }
+  trap cleanup_fail ERR
+
+  # 1) capture + HW encode to the FIFO (no portal; wlr-screencopy).
+  #    Frequent keyframes (g=30 ~0.5s) and no B-frames let ffmpeg cut short HLS segments,
+  #    which is what keeps end-to-end latency down (HLS latency ~= segment_dur * buffered_segs).
+  local wf_args=(-o "$output" -c h264_vaapi -d "$VAAPI_DEVICE" -m matroska
+                 -p g=30 -p bf=0 -f "$fifo")
+  [[ "$audio" -eq 1 ]] && wf_args+=(--audio)
+  wf-recorder "${wf_args[@]}" >/dev/null 2>&1 &
+  wf_pid=$!
+
+  # 2) remux wf-recorder's H264 to HLS (no video re-encode -> realtime, low GPU) and add a
+  #    silent AAC track (default receiver expects audio). The receiver accepts the stream
+  #    because the HTTP server sends CORS headers (the real cause of the earlier ERROR).
+  ffmpeg -hide_banner -loglevel error \
+    -fflags +genpts -i "$fifo" \
+    -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100 \
+    -map 0:v:0 -c:v copy \
+    -map 1:a:0 -c:a aac -b:a 128k -ar 44100 \
+    -f hls -hls_time 1 -hls_list_size 3 \
+    -hls_flags delete_segments+omit_endlist+independent_segments \
+    -hls_segment_filename "$HLS_DIR/seg_%05d.ts" "$HLS_DIR/stream.m3u8" \
+    >/dev/null 2>&1 &
+  ff_pid=$!
+
+  # 3) serve the segments on the LAN with CORS + correct MIME types (see write_helpers).
+  write_helpers
+  python "$STATE_DIR/serve.py" "$HLS_DIR" "$ip" "$MIRROR_PORT" >/dev/null 2>&1 &
+  http_pid=$!
+
+  # Wait for the playlist before casting.
+  local i=0
+  until [[ -f "$HLS_DIR/stream.m3u8" ]]; do
+    sleep 0.3; i=$((i+1))
+    [[ $i -gt 40 ]] && cleanup_fail
+    alive "$wf_pid" && alive "$ff_pid" || cleanup_fail
+  done
+
+  # 4) cast as LIVE (catt only casts BUFFERED, which stalls an endless stream).
+  [[ -z "$cc" ]] && die "no Chromecast found (catt scan)"
+  "$CATT_PY" "$STATE_DIR/cast_live.py" "$cc" "$url" >/dev/null 2>&1 || cleanup_fail
+
+  trap - ERR
+
+  printf '{"url":"%s","output":"%s","port":%s,"wf_pid":%s,"ffmpeg_pid":%s,"http_pid":%s}\n' \
+    "$url" "$output" "$MIRROR_PORT" "$wf_pid" "$ff_pid" "$http_pid" > "$SESSION"
+
+  log "cast-screen: mirroring $output -> $url"
+}
+
+# --- dispatch ---------------------------------------------------------------
+
+mkdir -p "$STATE_DIR"
+cmd="${1:-status}"; shift || true
+case "$cmd" in
+  start)        do_start "$@" ;;
+  stop)         do_stop ;;
+  status)       do_status ;;
+  fw-setup)     fw_setup ;;
+  fw-teardown)  fw_teardown ;;
+  *)            die "usage: cast-screen start [output] [--audio] | stop | status | fw-setup | fw-teardown" ;;
+esac

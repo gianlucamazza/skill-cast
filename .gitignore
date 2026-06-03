@@ -1,0 +1,16 @@
+# Vendored Cast Streaming lib (3.9G) and GN/gclient toolchain (805M): do not track.
+# openscreen/ is its OWN git clone — our sender sources live there and are versioned
+# on a dedicated branch inside that repo (cast/standalone_sender/), not duplicated here.
+/openscreen
+/depot_tools
+
+# gclient / cipd build metadata
+/.cipd/
+/.gclient
+/.gclient_entries
+/.gclient_previous_*
+/.gcs_entries
+
+# editor / OS noise
+*.swp
+.DS_Store

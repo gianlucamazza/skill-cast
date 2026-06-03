@@ -1,0 +1,187 @@
+#!/usr/bin/env bash
+# cast-mirror — native Cast Streaming desktop mirror to a Chromecast, low-latency.
+#
+# Unlike cast-screen (HLS, ~3-6s), this drives a custom openscreen Cast Streaming
+# *sender* that the TV's built-in mirroring receiver (app 0F5096E8) accepts: the
+# Hyprland desktop is captured (ext-image-copy-capture), encoded in hardware H.264
+# (VAAPI, CQP), and sent over RTP with real desktop audio (PipeWire monitor ->
+# Opus). Measured ~100ms glass-to-glass, 1080p, no app installed on the TV.
+#
+# Subcommands:
+#   start [output]   start the mirror (output e.g. eDP-1; default: first monitor)
+#   stop             stop the mirror, TV returns to idle
+#   status           show sender state + catt status
+#
+# No firewall setup needed: the sender initiates the UDP/RTP flow outbound to the
+# TV (port 8009), so conntrack lets the return traffic through (unlike the HLS
+# path, where the TV pulls from us). Deps: the cast_sender binary, catt, hyprctl,
+# jq, ip. The TV must expose Cast mirroring (Chromecast built-in / Google TV).
+set -euo pipefail
+
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/skill_cast"
+SESSION="$STATE_DIR/mirror.json"
+LOG="$STATE_DIR/mirror.log"
+
+# The openscreen sender binary (built from ~/Workspace/skill_cast/openscreen).
+BIN="${CAST_MIRROR_BIN:-$HOME/Workspace/skill_cast/openscreen/out/Default/cast_sender}"
+BITRATE="${CAST_MIRROR_BITRATE:-16000000}"   # max bitrate ceiling (CQP floats below)
+PORT=8009                                     # Cast castv2 TLS port on the TV
+CATT="$(command -v catt || echo "$HOME/.local/bin/catt")"
+# Shared device resolver (sits beside this script in the repo bin/).
+RESOLVE="$(dirname "$(readlink -f "$0")")/cast-resolve"
+
+log()  { printf '%s\n' "$*" >&2; }
+die()  { log "cast-mirror: $*"; exit 1; }
+have() { command -v "$1" >/dev/null 2>&1 || die "missing dependency: $1"; }
+alive() { [[ -n "${1:-}" ]] && kill -0 "$1" 2>/dev/null; }
+
+# Resolve the target Chromecast IP via the shared resolver (per-LAN preference,
+# deterministic; never "first responder"). Propagates its exit code (3=ambiguous,
+# 4=none, 5=preferred-not-present) so the caller fails loud with candidates.
+chromecast_ip() { "$RESOLVE" --ip; }
+# Default Hyprland output name (e.g. eDP-1) unless one was passed.
+default_output() { hyprctl monitors -j 2>/dev/null | jq -r '.[0].name' 2>/dev/null; }
+
+do_stop() {
+  if [[ -f "$SESSION" ]]; then
+    local pid; pid="$(jq -r '.pid // empty' "$SESSION")"
+    if alive "$pid"; then
+      kill "$pid" 2>/dev/null || true
+      sleep 0.4
+      alive "$pid" && kill -9 "$pid" 2>/dev/null || true
+    fi
+    rm -f "$SESSION"
+  fi
+  # Belt-and-suspenders: reap any stray sender, and nudge the receiver to idle.
+  pkill -f "$BIN" 2>/dev/null || true
+  log "cast-mirror: stopped."
+}
+
+do_status() {
+  if [[ ! -f "$SESSION" ]]; then
+    log "cast-mirror: no active mirror session."
+    "$CATT" status 2>/dev/null || true
+    return 0
+  fi
+  local pid out dev mode; pid="$(jq -r '.pid' "$SESSION")"
+  out="$(jq -r '.output' "$SESSION")"; dev="$(jq -r '.device' "$SESSION")"
+  mode="$(jq -r '.mode // "output"' "$SESSION")"
+  log "sender : $(alive "$pid" && echo "up ($pid)" || echo "down")"
+  log "$mode : $out"
+  log "device : $dev:$PORT"
+  log "log    : $LOG"
+  if ! alive "$pid"; then
+    log "(sender exited — run 'cast-mirror stop' to clear, then start again)"
+  fi
+}
+
+# Shared launch core. Args: <wayland-target> <mode> <label> [audio-pid]
+#   wayland-target: e.g. "screen:eDP-1" or "window:firefox" (passed to the sender)
+#   mode/label    : recorded in the session file and printed for the user
+#   audio-pid     : optional; window mode → capture only this app's audio
+_launch_mirror() {
+  local target="$1" mode="$2" label="$3" audio_pid="${4:-}"
+  [[ -x "$BIN" ]] || die "sender binary not found/executable: $BIN (build openscreen first)"
+  have jq; have hyprctl; have ip
+  [[ -x "$CATT" ]] || die "catt not found (pipx install catt)"
+  [[ -x "$RESOLVE" ]] || die "cast-resolve not found beside cast-mirror: $RESOLVE"
+
+  # Idempotent: tear down any previous session first.
+  [[ -f "$SESSION" ]] && do_stop
+
+  local cc; cc="$(chromecast_ip)"
+  [[ -z "$cc" ]] && die "no Chromecast found (catt scan)"
+
+  # Per-app audio (window mode): capture only the target app's sound.
+  local audio_args=()
+  if [[ -n "$audio_pid" && "$audio_pid" != "null" && "$audio_pid" -gt 0 ]] 2>/dev/null; then
+    audio_args=(--audio-pid "$audio_pid")
+  fi
+
+  mkdir -p "$STATE_DIR"
+  : > "$LOG"
+  # Native H.264 HW sender: -c h264, bitrate ceiling, TV:8009, live capture source.
+  "$BIN" -c h264 -m "$BITRATE" "${audio_args[@]}" "$cc:$PORT" "$target" >>"$LOG" 2>&1 &
+  local pid=$!
+
+  # Confirm it survives negotiation (the TV may reject; fail loud, not silent).
+  sleep 2
+  if ! alive "$pid"; then
+    log "cast-mirror: sender exited during startup — last log lines:"
+    tail -n 8 "$LOG" >&2 || true
+    die "mirror failed to start"
+  fi
+
+  printf '{"pid":%s,"mode":"%s","output":"%s","device":"%s","bitrate":%s,"audio_pid":"%s"}\n' \
+    "$pid" "$mode" "$label" "$cc" "$BITRATE" "$audio_pid" > "$SESSION"
+  local audio_note=""
+  [[ -n "$audio_pid" && "$audio_pid" != "null" ]] && audio_note=" (audio: app pid $audio_pid)"
+  log "cast-mirror: mirroring $mode '$label' -> $cc:$PORT (H.264 HW, ~120ms)$audio_note. Stop with: cast-mirror stop"
+}
+
+do_start() {
+  local output="${1:-}"
+  [[ -z "$output" ]] && output="$(default_output)"
+  [[ -z "$output" || "$output" == "null" ]] && die "could not determine output (pass one explicitly)"
+  _launch_mirror "screen:$output" output "$output"
+}
+
+# Resolve exactly ONE hyprctl client (compact JSON) for the request. With no
+# selector → the active window. With a selector → match class (ci-exact) or
+# title (substring, ci); among matches pick the focused/most-recent (smallest
+# focusHistoryID). Keeps direct CLI use deterministic; the skill normally
+# pre-resolves to a single window and asks the user when ambiguous.
+resolve_window() {
+  local sel="${1:-}"
+  if [[ -z "$sel" ]]; then
+    hyprctl activewindow -j 2>/dev/null
+    return
+  fi
+  hyprctl clients -j 2>/dev/null | jq -c --arg s "$sel" '
+    [ .[] | select(
+        ((.class // "") | ascii_downcase) == ($s | ascii_downcase)
+        or ((.title // "") | ascii_downcase | contains($s | ascii_downcase)) ) ]
+    | sort_by(.focusHistoryID) | (.[0] // empty)'
+}
+
+do_window() {
+  have jq; have hyprctl
+  local entry; entry="$(resolve_window "${1:-}")"
+  [[ -z "$entry" || "$entry" == "null" ]] && \
+    die "no matching window for '${1:-<active>}' (see: hyprctl clients -j)"
+
+  local pid addr cls label
+  pid="$(jq -r '.pid // empty' <<<"$entry")"
+  addr="$(jq -r '.address // empty' <<<"$entry")"   # 0x… Hyprland window address
+  cls="$(jq -r '.class // empty' <<<"$entry")"
+  label="$(jq -r '.title // .class // "?"' <<<"$entry")"
+  [[ -z "${1:-}" ]] && log "cast-mirror: no selector given; using active window '$label'"
+  if [[ -z "$pid" || "$pid" == "null" ]]; then
+    log "cast-mirror: could not resolve PID for '$label'; audio falls back to the full system mix"
+  fi
+
+  # Target the exact window by its Hyprland address (the reliable key, via
+  # hyprland-toplevel-mapping). Video (address) and audio (this entry's PID)
+  # therefore refer to the same window. Fall back to the class if no address.
+  local target
+  if [[ -n "$addr" && "$addr" != "null" ]]; then
+    target="window:addr=$addr"
+  elif [[ -n "$cls" && "$cls" != "null" ]]; then
+    log "cast-mirror: no window address; falling back to class match '$cls'"
+    target="window:$cls"
+  else
+    die "could not derive an address or class for the window"
+  fi
+  _launch_mirror "$target" window "$label" "$pid"
+}
+
+mkdir -p "$STATE_DIR"
+cmd="${1:-status}"; shift || true
+case "$cmd" in
+  start)     do_start "$@" ;;
+  window)    do_window "$@" ;;
+  workspace) die "workspace capture is not supported: no Wayland capture-source exists for a workspace. On a single monitor the active workspace IS the output — use 'cast-mirror start'. To cast one app, use 'cast-mirror window <class|title>'." ;;
+  stop)      do_stop ;;
+  status)    do_status ;;
+  *)         die "usage: cast-mirror start [output] | window [class|title] | stop | status" ;;
+esac
