@@ -24,10 +24,9 @@ This repo is a **Claude Code plugin** (`.claude-plugin/plugin.json` + `skills/`)
 │       └── cast-resolve             ← per-LAN device resolver (shared by both)
 ├── README.md · LICENSE · install.sh
 ├── docs/plan.md                     ← full phased design + decisions log
-├── docs/openscreen-integration.md   ← rebuild the sender / regenerate the patch
-├── openscreen-integration/          ← sender patch + args.gn (the vendored tree itself is gitignored)
+├── docs/openscreen-integration.md   ← how to build the sender (lives in the openscreen fork repo)
 ├── depot_tools/         ← GN/gclient toolchain (vendored, gitignored)
-└── openscreen/          ← openscreen source + build tree (vendored, 3.9G, gitignored)
+└── openscreen/          ← openscreen source + build tree (vendored, gitignored; shared at ~/Workspace/openscreen)
     ├── out/Default/cast_sender         ← the built sender binary
     └── cast/standalone_sender/         ← where our code lives (see below)
 ```
@@ -99,9 +98,9 @@ ninja -C ~/Workspace/openscreen/out/Default cast_sender
 is reconfigured.)
 
 The `openscreen/` clone is **gitignored** (it's upstream, not ours). Our sender + Cast-protocol
-changes and the build config are versioned as a patch + `args.gn` under `openscreen-integration/`
-— see [docs/openscreen-integration.md](docs/openscreen-integration.md) to rebuild from a fresh
-clone or to regenerate the patch after editing the sender.
+changes live in a dedicated fork, `gianlucamazza/openscreen` (branch `wayland-h264-sender`),
+shared with the `cast` extension project at `~/Workspace/openscreen` — see
+[docs/openscreen-integration.md](docs/openscreen-integration.md) to build it.
 
 ## Run
 

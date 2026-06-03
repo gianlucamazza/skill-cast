@@ -1,6 +1,0 @@
-is_debug = false
-have_ffmpeg = true
-have_libsdl2 = true
-have_libopus = true
-have_libvpx = true
-use_sysroot = false

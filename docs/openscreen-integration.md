@@ -1,96 +1,69 @@
-# openscreen integration — rebuild & traceability
+# openscreen integration — the native sender
 
-The native sender (`cast-mirror`'s backend) is built from a **local clone of
-[openscreen](https://chromium.googlesource.com/openscreen)**. That clone (3.9G, plus
-`depot_tools/`) is **gitignored** in this repo — it's not ours to track. Our work lives
-in two places, both versioned here so the binary is fully reproducible from this repo
-alone:
-
-- **`openscreen-integration/patches/0001-*.patch`** — every line we changed/added under
-  `cast/standalone_sender/` (the Wayland capture, H.264 VAAPI encode, PipeWire audio,
-  **and the Cast Streaming protocol edits**: `-c h264` OFFER, mirror routing + 120ms
-  playout in `looping_file_cast_agent`, `audio_target_pid` in `connection_settings`).
-- **`openscreen-integration/args.gn`** — the GN build configuration.
-
-Upstream pin (the commit the patch applies onto):
+The native sender (`cast-mirror`'s backend, `cast_sender`) is built from our
+openscreen fork, which now lives in its **own repository** and is shared with the
+`cast` browser-extension project — it is no longer vendored under this repo.
 
 | | |
 |---|---|
-| upstream | `https://chromium.googlesource.com/openscreen` |
-| base commit | `7675ef66` (`Roll third_party/quiche …`) |
-| our branch (local) | `skill-cast/screen-mirror` |
-| patch reconstructs | commit `3ac69361` |
+| fork | `git@github.com:gianlucamazza/openscreen.git` (private) |
+| branch | `wayland-h264-sender` (the patched tree) |
+| upstream base | `7675ef66` on `https://chromium.googlesource.com/openscreen` |
+| patched commit | `3ac69361` |
 
-> The branch lives only in the local clone (we can't push to chromium upstream). The
-> **patch is the canonical, backed-up form** of our work — it's verified to recreate
-> `3ac69361` byte-for-byte (`git am` onto `origin/main` → empty diff).
+The branch carries the Wayland capture, H.264 VAAPI encode, PipeWire audio, and
+the Cast Streaming protocol edits (`-c h264` OFFER, mirror routing + 120ms
+playout in `looping_file_cast_agent`, `audio_target_pid` in `connection_settings`).
+The fork branch is the **canonical source**; the `cast` repo keeps a derived,
+versioned `.patch` for an offline/CI build path.
+
+## Build the sender
+
+Provision the fork at `~/Workspace/openscreen` (shared location) and build:
+
+```bash
+git clone --branch wayland-h264-sender git@github.com:gianlucamazza/openscreen.git ~/Workspace/openscreen
+cd ~/Workspace/openscreen
+gclient sync                                  # needs depot_tools on PATH (~GB of deps)
+gn gen out/Default --args="is_debug=false have_ffmpeg=true have_libsdl2=true have_libopus=true have_libvpx=true use_sysroot=false"
+ninja -C out/Default cast_sender
+```
+
+Or just run the `cast` repo's automation, which does all of the above (and can
+also build from upstream+patch without fork access):
+
+```bash
+bash ~/Workspace/cast/native/integration/setup-openscreen.sh   # [--from-upstream]
+```
+
+The resulting `~/Workspace/openscreen/out/Default/cast_sender` is what
+`cast-mirror` / `cast-screen` invoke (override the path via `$CAST_MIRROR_BIN`).
 
 ## System dependencies (Arch)
 
-Needed to build/link the sender (the generated protocol `.c/.h` are already in the patch,
-so a normal build does **not** invoke wayland-scanner — only editing a protocol does):
+Needed to build/link the sender (the generated protocol `.c/.h` are committed on
+the branch, so a normal build does **not** invoke wayland-scanner):
 
 ```bash
 sudo pacman -S --needed ffmpeg pipewire opus libva wayland wayland-protocols ninja
 #   ffmpeg          -> h264_vaapi encode + libswscale downscale
 #   libva + driver  -> VAAPI H.264 (intel-media-driver on Iris Xe; mesa for AMD)
-#   pipewire        -> desktop / per-app audio capture (headers ship with the package)
+#   pipewire        -> desktop / per-app audio capture
 #   opus            -> audio encode
-#   wayland         -> libwayland-client + wayland-scanner (only for regen)
-#   wayland-protocols -> the ext-*-v1.xml sources (only for regen)
 sudo pacman -S --needed intel-media-driver    # Intel iGPU; AMD: libva-mesa-driver
 ```
 
-`gn` is **not** packaged in the official repos — it comes from the vendored `depot_tools/`
-(put it on `PATH`, or use the AUR `gn` package). `ninja` is the distro package above.
-The Hyprland protocol xml (`hyprland-toplevel-mapping-v1.xml`) is already in the patch, so
-`hyprland-protocols` is not required.
+`gn`/`ninja` come from the vendored `depot_tools/` (put it on `PATH`, or use the
+AUR `gn`).
 
-## Rebuild from scratch
+## Maintaining the sender
 
-```bash
-cd ~/Workspace/skill-cast
-
-# 1. clone openscreen + bootstrap deps (depot_tools provides gn/ninja/gclient)
-git clone https://chromium.googlesource.com/openscreen
-git -C openscreen checkout 7675ef66
-#   fetch third_party (the 3.9G tree). Needs depot_tools on PATH:
-( cd openscreen && gclient sync )      # or: PATH="$PWD/depot_tools:$PATH"
-
-# 2. apply our sender + protocol changes
-git -C openscreen am "$PWD/openscreen-integration/patches/"0001-*.patch
-
-# 3. configure with our build args, then build
-cp openscreen-integration/args.gn openscreen/out/Default/args.gn 2>/dev/null \
-  || gn gen openscreen/out/Default --args="$(grep -v '^#' openscreen-integration/args.gn | paste -sd' ')"
-ninja -C openscreen/out/Default cast_sender
-```
-
-The resulting `openscreen/out/Default/cast_sender` is what `cast-mirror` / `cast-screen`
-invoke (override path via `$CAST_MIRROR_BIN`).
-
-## Maintenance — keep the patch in sync (do this, don't automate it)
-
-The patch only stays truthful if it's regenerated after every change to the sender.
-After editing anything under `openscreen/cast/standalone_sender/`:
+Edit `cast/standalone_sender/` on the `wayland-h264-sender` branch in the fork
+and push it there — that branch is the source of truth. Re-cut the derived patch
+in the `cast` repo afterwards:
 
 ```bash
-git -C openscreen add cast/standalone_sender/
-git -C openscreen commit                       # amend or new commit on skill-cast/screen-mirror
-git -C openscreen format-patch origin/main..skill-cast/screen-mirror \
-  -o "$PWD/openscreen-integration/patches/"
-git add openscreen-integration/ && git commit && git push   # back up the shell repo
-```
-
-No git hook for this on purpose: it's a single-maintainer repo and a hook that silently
-rewrites the patch on every build would be theatre, not safety. The rule above is the
-contract; the verification below is how you check it held.
-
-## Verify the patch still matches the tree
-
-```bash
-git -C openscreen worktree add --detach /tmp/os-verify origin/main
-git -C /tmp/os-verify am "$PWD/openscreen-integration/patches/"0001-*.patch
-git -C /tmp/os-verify diff --stat skill-cast/screen-mirror   # must be EMPTY
-git -C openscreen worktree remove --force /tmp/os-verify
+git -C ~/Workspace/openscreen format-patch 7675ef66..wayland-h264-sender \
+  -o ~/Workspace/cast/native/integration/patches/
+# then update native/integration/openscreen.pin if the commits changed
 ```
