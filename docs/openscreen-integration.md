@@ -33,7 +33,7 @@ Or just run the `cast` repo's automation, which does all of the above (and can
 also build from upstream+patch without fork access):
 
 ```bash
-bash ~/Workspace/cast/native/integration/setup-openscreen.sh   # [--from-upstream]
+bash ~/Workspace/tooling/cast/native/integration/setup-openscreen.sh   # [--from-upstream]
 ```
 
 The resulting `~/Workspace/tooling/openscreen-build/openscreen/out/Default/cast_sender` is what
@@ -64,6 +64,6 @@ in the `cast` repo afterwards:
 
 ```bash
 git -C ~/Workspace/tooling/openscreen-build/openscreen format-patch 7675ef66..wayland-h264-sender \
-  -o ~/Workspace/cast/native/integration/patches/
+  -o ~/Workspace/tooling/cast/native/integration/patches/
 # then update native/integration/openscreen.pin if the commits changed
 ```

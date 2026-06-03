@@ -14,7 +14,7 @@ remains as a fallback.
 This repo is a **Claude Code plugin** (`.claude-plugin/plugin.json` + `skills/`):
 
 ```
-~/Workspace/skill-cast/
+~/Workspace/tooling/skill-cast/
 ├── .claude-plugin/plugin.json       ← plugin manifest (name, version, …)
 ├── skills/skill-cast/
 │   ├── SKILL.md                     ← the skill; symlinked into ~/.claude/skills/skill-cast/ (dev)
@@ -26,7 +26,7 @@ This repo is a **Claude Code plugin** (`.claude-plugin/plugin.json` + `skills/`)
 ├── docs/plan.md                     ← full phased design + decisions log
 ├── docs/openscreen-integration.md   ← how to build the sender (lives in the openscreen fork repo)
 ├── depot_tools/         ← GN/gclient toolchain (vendored, gitignored)
-└── openscreen/          ← openscreen source + build tree (vendored, gitignored; shared at ~/Workspace/openscreen)
+└── openscreen/          ← openscreen source + build tree (vendored, gitignored; shared at ~/Workspace/tooling/openscreen-build/openscreen)
     ├── out/Default/cast_sender         ← the built sender binary
     └── cast/standalone_sender/         ← where our code lives (see below)
 ```
@@ -39,8 +39,8 @@ from `${CLAUDE_PLUGIN_ROOT}/skills/skill-cast/scripts/`.
 ## Setup
 
 ```bash
-git clone <repo-url> ~/Workspace/skill-cast
-cd ~/Workspace/skill-cast
+git clone <repo-url> ~/Workspace/tooling/skill-cast
+cd ~/Workspace/tooling/skill-cast
 ./install.sh                 # local-dev: symlink scripts onto PATH + skill into ~/.claude/skills (idempotent)
 ```
 
@@ -91,7 +91,7 @@ Patched vendored files (small, deliberate edits):
 ## Build
 
 ```bash
-ninja -C ~/Workspace/openscreen/out/Default cast_sender
+ninja -C ~/Workspace/tooling/openscreen-build/openscreen/out/Default cast_sender
 ```
 
 (GN was already bootstrapped via `depot_tools` + `gclient sync`; only re-run those if the tree
@@ -99,7 +99,7 @@ is reconfigured.)
 
 The `openscreen/` clone is **gitignored** (it's upstream, not ours). Our sender + Cast-protocol
 changes live in a dedicated fork, `gianlucamazza/openscreen` (branch `wayland-h264-sender`),
-shared with the `cast` extension project at `~/Workspace/openscreen` — see
+shared with the `cast` extension project at `~/Workspace/tooling/openscreen-build/openscreen` — see
 [docs/openscreen-integration.md](docs/openscreen-integration.md) to build it.
 
 ## Run

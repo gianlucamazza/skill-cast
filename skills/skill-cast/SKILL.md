@@ -51,8 +51,8 @@ prefix. The native sender binary is **not** bundled (3.9G build tree); for the n
   or re-run with `CAST_DEVICE="<name>"`. Exit 4 = no devices on this LAN; exit 5 = the preferred
   device isn't on this LAN.
 - **Native mirror** needs the prebuilt sender binary
-  `~/Workspace/openscreen/out/Default/cast_sender` (override via `$CAST_MIRROR_BIN`).
-  If it's missing, rebuild: `ninja -C ~/Workspace/openscreen/out/Default cast_sender`.
+  `~/Workspace/tooling/openscreen-build/openscreen/out/Default/cast_sender` (override via `$CAST_MIRROR_BIN`).
+  If it's missing, rebuild: `ninja -C ~/Workspace/tooling/openscreen-build/openscreen/out/Default cast_sender`.
   It needs VAAPI (`/dev/dri/renderD128`, H.264 encode) and PipeWire for audio — both present
   here. **No firewall setup required** (the sender initiates the UDP/RTP flow outbound to the
   TV, so conntrack lets the return traffic back in).
