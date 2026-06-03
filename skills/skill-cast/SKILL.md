@@ -60,8 +60,9 @@ prefix. The native sender binary is **not** bundled (3.9G build tree); for the n
   + catt's `45000:47000/tcp`), plus `wf-recorder`, `ffmpeg` (`h264_vaapi`), `python`, `jq`,
   `hyprctl`. Local-file `catt` casting also needs that ufw rule (the TV pulls the file from us).
 - **Optional**: `notify-send` (libnotify) — if present, `cast-mirror`/`cast-screen` emit
-  freedesktop desktop notifications on start/stop/failure. Absent → silently skipped, not a
-  hard dependency.
+  freedesktop desktop notifications on **failure** (no device / startup error). Absent →
+  silently skipped, not a hard dependency. (Start/stop notifications are intentionally left
+  to whatever monitors the receiver, e.g. a desktop cast indicator.)
 
 ## Arguments
 

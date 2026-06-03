@@ -128,7 +128,6 @@ _launch_mirror() {
   local audio_note=""
   [[ -n "$audio_pid" && "$audio_pid" != "null" ]] && audio_note=" (audio: app pid $audio_pid)"
   log "cast-mirror: mirroring $mode '$label' -> $cc:$PORT (H.264 HW, ~120ms)$audio_note. Stop with: cast-mirror stop"
-  notify normal "Casting started" "$mode: $label -> $cc"
 }
 
 do_start() {
@@ -193,7 +192,7 @@ case "$cmd" in
   start)     do_start "$@" ;;
   window)    do_window "$@" ;;
   workspace) die "workspace capture is not supported: no Wayland capture-source exists for a workspace. On a single monitor the active workspace IS the output — use 'cast-mirror start'. To cast one app, use 'cast-mirror window <class|title>'." ;;
-  stop)      had=0; [[ -f "$SESSION" ]] && had=1; do_stop; [[ "$had" -eq 1 ]] && notify low "Casting stopped" ;;
+  stop)      do_stop ;;
   status)    do_status ;;
   *)         die "usage: cast-mirror start [output] | window [class|title] | stop | status" ;;
 esac

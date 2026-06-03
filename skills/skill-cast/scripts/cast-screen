@@ -269,7 +269,6 @@ do_start() {
     "$url" "$output" "$MIRROR_PORT" "$wf_pid" "$ff_pid" "$http_pid" > "$SESSION"
 
   log "cast-screen: mirroring $output -> $url"
-  notify normal "Casting started" "$output -> $cc (HLS)"
 }
 
 # --- dispatch ---------------------------------------------------------------
@@ -278,7 +277,7 @@ mkdir -p "$STATE_DIR"
 cmd="${1:-status}"; shift || true
 case "$cmd" in
   start)        do_start "$@" ;;
-  stop)         had=0; [[ -f "$SESSION" ]] && had=1; do_stop; [[ "$had" -eq 1 ]] && notify low "Casting stopped" ;;
+  stop)         do_stop ;;
   status)       do_status ;;
   fw-setup)     fw_setup ;;
   fw-teardown)  fw_teardown ;;
