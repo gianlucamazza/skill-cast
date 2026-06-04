@@ -96,7 +96,7 @@ di openscreen) come secondo stream.
 
 ## Artefatti
 
-1. **`~/Workspace/skill-cast/`** — qui sì autoriamo il progetto (codice C++ + build), come
+1. **`~/Workspace/tooling/skill-cast/`** — qui sì autoriamo il progetto (codice C++ + build), come
    suggerito dall'utente in apertura: è codice vero, versionabile, non un semplice SKILL.md.
    - `src/` (capture wlr-screencopy, encoder VAAPI, glue openscreen sender), `meson.build`
      o `CMakeLists.txt`, `third_party/openscreen` (submodule/build), `README.md`.
@@ -391,7 +391,7 @@ validare a step (cattura dmabuf → import → VPP → encode), tenendo il fallb
 ### Context
 A valle della misura 4d-0 e del micro-tuning (playout 120ms), l'utente chiede di **consolidare
 tutto**: progetto, memorie e discoveries. Survey read-only dei tre archivi → stato:
-- **Progetto** `~/Workspace/skill-cast/`: README.md, skill/SKILL.md, bin/cast-mirror aggiornati
+- **Progetto** `~/Workspace/tooling/skill-cast/`: README.md, skill/SKILL.md, bin/cast-mirror aggiornati
   oggi (✓). Unico stale: **`docs/plan.md`** (snapshot 01:28, pre-misura) fuori sync col piano
   canonico. Niente git repo (vendored 4.7GB → fuori scope, non si versiona).
 - **Memorie** (auto-memory `…-Workspace-skill-cast/memory/`): `skill-cast-native-mirror.md` già
@@ -408,7 +408,7 @@ research `active` → solo nota vault, `card: null`; `_index.md` è auto-datavie
 **A. Progetto — refresh snapshot**
 - Copiare il piano canonico `~/.claude/plans/stiamo-progettando-una-skill-enchanted-nova.md`
   (questo file, con la sezione 4d-0 + questo Consolidamento) su
-  `~/Workspace/skill-cast/docs/plan.md`, riallineando lo snapshot.
+  `~/Workspace/tooling/skill-cast/docs/plan.md`, riallineando lo snapshot.
 
 **B. Memorie — cross-link**
 - `…-Workspace-skill-cast/memory/skill-cast-native-mirror.md`: aggiungere una riga che punta alle
@@ -443,7 +443,7 @@ C2. **Research tecnica** (vault-only, no card):
   `[[bp-protocol-level-diagnosis]]`.
 
 ### Verifica (post-esecuzione)
-- `diff ~/.claude/plans/…nova.md ~/Workspace/skill-cast/docs/plan.md` → identici.
+- `diff ~/.claude/plans/…nova.md ~/Workspace/tooling/skill-cast/docs/plan.md` → identici.
 - Le due note vault hanno frontmatter valido (campi `type/kind/status/card/confidence/source/
   reviewed/created/updated`); compaiono nella dataview «Attive» di `_index.md`.
 - La card `kb_ws-measure-before-optimizing.md` esiste e ha una riga in MEMORY.md globale →
