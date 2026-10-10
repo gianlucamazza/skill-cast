@@ -339,7 +339,7 @@ validare a step (cattura dmabuf → import → VPP → encode), tenendo il fallb
 - `cast/standalone_sender/BUILD.gn` (4c pipewire; 4d eventuali gbm/libva)
 
 ### Verifica end-to-end (Fase 4)
-1. **4a+4b**: un rebuild, run `out/Default/cast_sender -c h264 -m 16000000 192.168.1.228:8009
+1. **4a+4b**: un rebuild, run `out/Default/cast_sender -c h264 -m 16000000 <tv-ip>:8009
    "screen:eDP-1"`. Verdetto utente su nitidezza (deve salire) e latenza (~100ms, no stutter).
    Controllo log: `AvgEncodeTimeMs`, bitrate effettivo (deve avvicinarsi a ~8M).
 2. **4c**: riprodurre audio sul desktop → deve uscire dalla TV in sync; verificare nessun
@@ -354,7 +354,7 @@ validare a step (cattura dmabuf → import → VPP → encode), tenendo il fallb
 
 - **VAAPI low-latency**: i parametri encoder messi a punto per l'HLS (`h264_vaapi`,
   `/dev/dri/renderD128`, no B-frame, GOP corto) si trasferiscono al VP8 in `cast-mirror`.
-- **Discovery/IP**: `catt scan` per IP del device (`192.168.1.228`), LAN IP `192.168.1.75`.
+- **Discovery/IP**: `catt scan` per IP del device (`<tv-ip>`), LAN IP `<host-ip>`.
 - **`~/.local/bin/cast-screen`** resta come fallback HLS funzionante (ufw + CORS + LIVE già
   risolti) — non si butta nulla.
 - **firewalld→ufw**: regole già impostate; il Cast Streaming usa UDP/RTP effimero — verificare
@@ -400,7 +400,7 @@ tutto**: progetto, memorie e discoveries. Survey read-only dei tre archivi → s
   Gap reale → l'utente ha approvato la promozione di **working-style + research tecnica**.
 
 Schema verificato dalle note esistenti (replico senza derive): working-style `active` → nota nel
-vault + card `kb_<n>.md` nella memoria globale `-home-gianluca/memory/` + riga in quel MEMORY.md;
+vault + card `kb_<n>.md` nella memoria globale `-home-<user>/memory/` + riga in quel MEMORY.md;
 research `active` → solo nota vault, `card: null`; `_index.md` è auto-dataview (NESSUN edit manuale).
 
 ### Azioni (tutte fuori plan mode)
@@ -425,10 +425,10 @@ C1. **Working-style** (doctrine cross-progetto, con card always-on):
   giustificazione del 4d zero-copy crollava (restava solo batteria) → rinviato. Collega
   `[[ws-correctness-over-workarounds]]`, `[[ws-verify-contradictions]]`,
   `[[bp-protocol-level-diagnosis]]`.
-- Card di recall `~/.claude/projects/-home-gianluca/memory/kb_ws-measure-before-optimizing.md`
+- Card di recall `~/.claude/projects/-home-<user>/memory/kb_ws-measure-before-optimizing.md`
   (`name: kb-ws-measure-before-optimizing`, `type: feedback`), corpo **Why/How to apply** +
   pointer alla nota vault + `[[kb-ws-correctness-over-workarounds]]`.
-- Aggiungere la riga indice in `~/.claude/projects/-home-gianluca/memory/MEMORY.md`, sezione
+- Aggiungere la riga indice in `~/.claude/projects/-home-<user>/memory/MEMORY.md`, sezione
   «## Knowledge cards (working-style, indicizzate)».
 
 C2. **Research tecnica** (vault-only, no card):
