@@ -109,7 +109,7 @@ cfg_default_device() { jq -r '.default_device // ""' "$CONFIG"; }
 # --- scan (cached) ----------------------------------------------------------
 
 # Refresh the name->ip scan cache if older than TTL. catt scan lines look like:
-#   192.168.1.228 - 43PUS9235/12 - Philips TPM191E
+#   192.0.2.10 - LivingRoom - Chromecast
 scan_refresh() {
   local age=$((SCAN_TTL + 1))
   if [[ -f "$SCAN_CACHE" ]]; then
